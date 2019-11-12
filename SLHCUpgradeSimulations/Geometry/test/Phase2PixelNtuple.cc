@@ -1,5 +1,5 @@
 /*
-  \class Phase2PixelNtuple
+  class Phase2PixelNtuple
 */
 
 // DataFormats
@@ -14,6 +14,15 @@
 #include "DataFormats/SiPixelCluster/interface/SiPixelCluster.h"
 
 #include "DataFormats/TrackReco/interface/Track.h"
+
+#include "TrackingTools/Records/interface/TransientTrackRecord.h"
+#include "TrackingTools/Records/interface/TransientRecHitRecord.h"
+
+#include "TrackingTools/TransientTrack/interface/TransientTrack.h"
+#include "TrackingTools/TransientTrack/interface/TransientTrackBuilder.h"
+#include "TrackingTools/TransientTrackingRecHit/interface/TransientTrackingRecHitBuilder.h"
+#include "TrackingTools/TransientTrackingRecHit/interface/TransientTrackingRecHit.h"
+#include "RecoTracker/TransientTrackingRecHit/interface/TkTransientTrackingRecHitBuilder.h"
 
 #include "SimDataFormats/TrackingHit/interface/PSimHit.h"
 #include "SimDataFormats/TrackingHit/interface/PSimHitContainer.h"
@@ -97,6 +106,7 @@ protected:
                    const int panel_num,
                    const int side_num,
                    trackingRecHit_iterator pixeliter,
+		   TransientTrackingRecHit::RecHitPointer transRecHit,
                    const int num_simhit,
                    const PSimHit* closest_simhit,
                    const GeomDet* PixGeom);
@@ -108,6 +118,7 @@ private:
   edm::ParameterSet const conf_;
   TrackerHitAssociator::Config trackerHitAssociatorConfig_;
   edm::EDGetTokenT<edmNew::DetSetVector<SiPixelRecHit>> pixelRecHits_token;
+  std::string ttrhBuilder_;
   edm::EDGetTokenT<edm::View<reco::Track>> token_recoTracks;
   bool verbose_;
   bool picky_;
@@ -130,6 +141,13 @@ private:
     float xx;
     float xy;
     float yy;
+
+    float xloc;
+    float yloc;
+    float xxloc;
+    float xyloc;
+    float yyloc;
+
     float row;
     float col;
     float gx;
@@ -172,6 +190,7 @@ private:
 Phase2PixelNtuple::Phase2PixelNtuple(edm::ParameterSet const& conf)
     : trackerHitAssociatorConfig_(conf, consumesCollector()),
       pixelRecHits_token(consumes<edmNew::DetSetVector<SiPixelRecHit>>(edm::InputTag("siPixelRecHits"))),
+      ttrhBuilder_(conf.getParameter<std::string>("ttrhBuilder")),  //ttrhBuilder_token def
       token_recoTracks(consumes<edm::View<reco::Track>>(conf.getParameter<edm::InputTag>("trackProducer"))),
       verbose_(conf.getUntrackedParameter<bool>("verbose", false)),
       picky_(conf.getUntrackedParameter<bool>("picky", false)),
@@ -248,6 +267,13 @@ void Phase2PixelNtuple::beginJob() {
   pixeltreeOnTrack_->Branch("xx", &recHit_.xx, "xx/F");
   pixeltreeOnTrack_->Branch("xy", &recHit_.xy, "xy/F");
   pixeltreeOnTrack_->Branch("yy", &recHit_.yy, "yy/F");
+
+  pixeltreeOnTrack_->Branch("xloc", &recHit_.xloc, "x/F");
+  pixeltreeOnTrack_->Branch("yloc", &recHit_.yloc, "y/F");
+  pixeltreeOnTrack_->Branch("xxloc", &recHit_.xxloc, "xx/F");
+  pixeltreeOnTrack_->Branch("xyloc", &recHit_.xyloc, "xy/F");
+  pixeltreeOnTrack_->Branch("yyloc", &recHit_.yyloc, "yy/F");
+
   pixeltreeOnTrack_->Branch("row", &recHit_.row, "row/F");
   pixeltreeOnTrack_->Branch("col", &recHit_.col, "col/F");
   pixeltreeOnTrack_->Branch("gx", &recHit_.gx, "gx/F");
@@ -310,6 +336,16 @@ void Phase2PixelNtuple::analyze(const edm::Event& e, const edm::EventSetup& es) 
   e.getByToken(pixelRecHits_token, recHitColl);
   // for finding matched simhit
   TrackerHitAssociator associate(e, trackerHitAssociatorConfig_);
+
+  //Transient Rechit Builders                                               
+  edm::ESHandle<TransientTrackBuilder> theB;
+  es.get<TransientTrackRecord>().get( "TransientTrackBuilder", theB );
+
+  //ttrh builder def
+  ESHandle<TransientTrackingRecHitBuilder> hitBuilder;
+  es.get<TransientRecHitRecord>().get( ttrhBuilder_, hitBuilder );
+  const TkTransientTrackingRecHitBuilder * builder = static_cast<TkTransientTrackingRecHitBuilder const *>(hitBuilder.product());
+  auto hitCloner = builder->cloner();
 
   if ((recHitColl.product())->dataSize() > 0) {
     std::string detname;
@@ -378,6 +414,7 @@ void Phase2PixelNtuple::analyze(const edm::Event& e, const edm::EventSetup& es) 
           }
           int num_simhit = matched.size();
           recHit_.init();
+	  // filling in on ALL track rechits
           fillPRecHit(detid_db,
                       subid,
                       layer_num,
@@ -416,8 +453,14 @@ void Phase2PixelNtuple::analyze(const edm::Event& e, const edm::EventSetup& es) 
 #ifdef EDM_ML_DEBUG
       std::cout << " num of hits for track " << rT << " = " << track->recHitsSize() << std::endl;
 #endif
+      TransientTrack tTrack = theB->build(*track);
+      TrajectoryStateOnSurface initialTSOS = tTrack.innermostMeasurementState(); //defining initial TSOS
       for (trackingRecHit_iterator ih = track->recHitsBegin(); ih != track->recHitsEnd(); ++ih) {
         ++iT;
+
+	auto tmprh = (*ih)->cloneForFit(*builder->geometry()->idToDet((**ih).geographicalId()));
+	auto transRecHit = hitCloner.makeShared(tmprh, initialTSOS);
+
         TrackingRecHit* hit = (*ih)->clone();
         const DetId& detId = hit->geographicalId();
         const GeomDet* geomDet(theGeometry->idToDet(detId));
@@ -482,6 +525,7 @@ void Phase2PixelNtuple::analyze(const edm::Event& e, const edm::EventSetup& es) 
               }
 
               recHit_.init();
+	      // fill on track rechits
               fillPRecHit(detid_db,
                           subid,
                           layer_num,
@@ -491,7 +535,8 @@ void Phase2PixelNtuple::analyze(const edm::Event& e, const edm::EventSetup& es) 
                           blade_num,
                           panel_num,
                           side_num,
-                          ih,
+                          ih, // TrackingRecHitIterator
+			  transRecHit, //TransientTrackingRecHit
                           num_simhit,
                           closest_simhit,
                           geomDet);
@@ -648,6 +693,7 @@ void Phase2PixelNtuple::fillPRecHit(const int detid_db,
                                     const int panel_num,
                                     const int side_num,
                                     trackingRecHit_iterator ih,
+				    TransientTrackingRecHit::RecHitPointer transRecHit,
                                     const int num_simhit,
                                     const PSimHit* closest_simhit,
                                     const GeomDet* PixGeom) {
@@ -660,6 +706,13 @@ void Phase2PixelNtuple::fillPRecHit(const int detid_db,
   recHit_.xx = le.xx();
   recHit_.xy = le.xy();
   recHit_.yy = le.yy();
+
+  recHit_.xloc = transRecHit->localPosition().x();
+  recHit_.yloc = transRecHit->localPosition().y();
+  recHit_.xxloc = transRecHit->localPositionError().xx();
+  recHit_.xyloc = transRecHit->localPositionError().xy();
+  recHit_.yyloc = transRecHit->localPositionError().yy();
+
   GlobalPoint GP = PixGeom->surface().toGlobal(pixeliter->localPosition());
   recHit_.gx = GP.x();
   recHit_.gy = GP.y();
@@ -780,6 +833,13 @@ void Phase2PixelNtuple::RecHit::init() {
   xx = dummy_float;
   xy = dummy_float;
   yy = dummy_float;
+
+  xloc = dummy_float;
+  yloc = dummy_float;
+  xxloc = dummy_float;
+  xyloc = dummy_float;
+  yyloc = dummy_float;
+
   row = dummy_float;
   col = dummy_float;
   gx = dummy_float;
