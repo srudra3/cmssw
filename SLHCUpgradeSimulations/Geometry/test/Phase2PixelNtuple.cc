@@ -67,7 +67,7 @@
 #include "CLHEP/Units/PhysicalConstants.h"
 #include "CLHEP/Units/SystemOfUnits.h"
 
-//#define EDM_ML_DEBUG
+#define EDM_ML_DEBUG
 
 using namespace std;
 using namespace edm;
@@ -268,11 +268,11 @@ void Phase2PixelNtuple::beginJob() {
   pixeltreeOnTrack_->Branch("xy", &recHit_.xy, "xy/F");
   pixeltreeOnTrack_->Branch("yy", &recHit_.yy, "yy/F");
 
-  pixeltreeOnTrack_->Branch("xloc", &recHit_.xloc, "x/F");
-  pixeltreeOnTrack_->Branch("yloc", &recHit_.yloc, "y/F");
-  pixeltreeOnTrack_->Branch("xxloc", &recHit_.xxloc, "xx/F");
-  pixeltreeOnTrack_->Branch("xyloc", &recHit_.xyloc, "xy/F");
-  pixeltreeOnTrack_->Branch("yyloc", &recHit_.yyloc, "yy/F");
+  pixeltreeOnTrack_->Branch("xloc", &recHit_.xloc, "xloc/F");
+  pixeltreeOnTrack_->Branch("yloc", &recHit_.yloc, "yloc/F");
+  pixeltreeOnTrack_->Branch("xxloc", &recHit_.xxloc, "xxloc/F");
+  pixeltreeOnTrack_->Branch("xyloc", &recHit_.xyloc, "xyloc/F");
+  pixeltreeOnTrack_->Branch("yyloc", &recHit_.yyloc, "yyloc/F");
 
   pixeltreeOnTrack_->Branch("row", &recHit_.row, "row/F");
   pixeltreeOnTrack_->Branch("col", &recHit_.col, "col/F");
@@ -707,11 +707,14 @@ void Phase2PixelNtuple::fillPRecHit(const int detid_db,
   recHit_.xy = le.xy();
   recHit_.yy = le.yy();
 
+ // std::cout << "printing recHit_.xxloc" << recHit_.xxloc << std::endl;
   recHit_.xloc = transRecHit->localPosition().x();
   recHit_.yloc = transRecHit->localPosition().y();
   recHit_.xxloc = transRecHit->localPositionError().xx();
   recHit_.xyloc = transRecHit->localPositionError().xy();
   recHit_.yyloc = transRecHit->localPositionError().yy();
+  std::cout << "printing recHit_.xxloc" << recHit_.xxloc << std::endl;
+
 
   GlobalPoint GP = PixGeom->surface().toGlobal(pixeliter->localPosition());
   recHit_.gx = GP.x();

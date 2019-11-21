@@ -16,7 +16,7 @@ process.load('FWCore.MessageService.MessageLogger_cfi')
 process.load('Configuration.EventContent.EventContent_cff')
 process.load('SimGeneral.MixingModule.mixNoPU_cfi')
 #process.load('SimGeneral.MixingModule.mix_POISSON_average_cfi')
-process.load('Configuration.Geometry.GeometryExtended2026D41Reco_cff')
+process.load('Configuration.Geometry.GeometryExtended2026D35Reco_cff')
 process.load('Configuration.StandardSequences.MagneticField_cff')
 process.load('Configuration.StandardSequences.Digi_cff')
 process.load('Configuration.StandardSequences.SimL1Emulator_cff')
@@ -28,14 +28,16 @@ process.load('Configuration.StandardSequences.L1Reco_cff')
 process.load('Configuration.StandardSequences.Reconstruction_cff')
 process.load('Configuration.StandardSequences.EndOfProcess_cff')
 process.load('Configuration.StandardSequences.FrontierConditions_GlobalTag_cff')
-
+# import of TransientTrackBuilder configurations
+process.load('TrackingTools.TransientTrack.TransientTrackBuilder_cfi')
+#process.load('RecoTracker.FinalTrackSelectors.TrackMVAClassifierPrompt_cfi')
 process.maxEvents = cms.untracked.PSet(
     input = cms.untracked.int32(10)
 )
 
 process.source = cms.Source("PoolSource",
     fileNames = cms.untracked.vstring(
-       '/store/relval/CMSSW_10_6_0_patch2/RelValSingleMuPt10/GEN-SIM/106X_upgrade2023_realistic_v3_2023D41noPU-v1/10000/7377ED92-245C-CC4D-9F05-25ABB5522A08.root'
+       'file:/afs/cern.ch/work/s/srudrabh/TemplateVsGenericCPE/CMSSW_11_0_0_pre11/src/20007.0_SingleMuPt10+SingleMuPt10_pythia8_2026D35_GenSimHLBeamSpotFull+DigiFullTrigger_2026D35+RecoFullGlobal_2026D35+HARVESTFullGlobal_2026D35/step2.root'
     )
 )
 
@@ -78,6 +80,8 @@ process.ReadLocalMeasurement = cms.EDAnalyzer("Phase2PixelNtuple",
                          'TrackerHitsPixelBarrelHighTof',
                          'TrackerHitsPixelEndcapLowTof',
                          'TrackerHitsPixelEndcapHighTof'),
+   #ttrhBuilder = cms.string("WithAngleAndTemplate"), 
+   ttrhBuilder = cms.string("WithTrackAngle"),
    usePhase2Tracker = cms.bool(True),
    pixelSimLinkSrc = cms.InputTag("simSiPixelDigis", "Pixel"),
    phase2TrackerSimLinkSrc = cms.InputTag("simSiPixelDigis", "Tracker")
@@ -102,7 +106,7 @@ process.siPixelClusters.ElectronPerADCGain  = cms.double(135.)
 process.siPixelClustersPreSplitting.ElectronPerADCGain  = cms.double(135.)
 
 from Configuration.AlCa.GlobalTag import GlobalTag
-process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase2_realistic_T14', '')
+process.GlobalTag = GlobalTag(process.GlobalTag, 'auto:phase2_realistic_T6', '')
 
 # Path and EndPath definitions
 process.digitisation_step = cms.Path(process.pdigi_valid)
@@ -148,6 +152,6 @@ from Configuration.StandardSequences.earlyDeleteSettings_cff import customiseEar
 process = customiseEarlyDelete(process)
 # End adding early deletion
 process.TFileService = cms.Service('TFileService',
-fileName = cms.string("pixelntuple.root")
+fileName = cms.string("pixelntuple_trackangle_2026D35_crab.root")
 )
 
